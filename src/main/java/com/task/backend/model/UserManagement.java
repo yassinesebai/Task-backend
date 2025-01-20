@@ -37,4 +37,7 @@ public class UserManagement {
     @ManyToOne
     @JoinColumn(name = "role_id", nullable = false)
     private UserRole role;
+
+    @Column(name = "department", length = 100)
+    private String department;
 }

@@ -2,14 +2,11 @@ package com.task.backend.service;
 
 import com.task.backend.dto.request.AuthRequest;
 import com.task.backend.dto.request.UserDTO;
-import com.task.backend.dto.request.UserRoleDTO;
 import com.task.backend.dto.response.GlobalResponse;
 import com.task.backend.dto.response.JwtResponse;
-import com.task.backend.model.Permission;
-import com.task.backend.model.RolePermission;
+import com.task.backend.dto.response.UserResponseDTO;
 import com.task.backend.model.UserManagement;
 import com.task.backend.model.UserRole;
-import com.task.backend.repository.PermissionRepository;
 import com.task.backend.repository.UserManagementRepository;
 import com.task.backend.repository.UserRoleRepository;
 import com.task.backend.security.JwtService;
@@ -19,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -36,7 +34,6 @@ public class UserService {
     private final ModelMapper modelMapper;
     private final UserRoleRepository userRoleRepository;
     private final UserManagementRepository userManagementRepository;
-    private final PermissionRepository permissionRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
@@ -49,6 +46,12 @@ public class UserService {
         );
 
         if (authentication.isAuthenticated()) {
+            String department = "";
+            Optional<UserManagement> userManagement = userManagementRepository
+                    .findById(authRequest.getUsername());
+            if (userManagement.isPresent()) {
+                department = userManagement.get().getDepartment();
+            }
             String token = jwtService.GenerateToken(trimmedUsername);
             logger.info("Token successfully generated");
 
@@ -59,12 +62,24 @@ public class UserService {
                     .orElseThrow(() -> new IllegalArgumentException("No role found"))
                     .getAuthority();
 
+            UserRole userRole = userRoleRepository.findByName(role);
+            List<String> permissions;
+            if (userRole != null) {
+                permissions = userRole.getRolePermissions()
+                        .stream()
+                        .map(rolePermission -> rolePermission.getPermission().getAction() + " " + rolePermission.getPermission().getTableName())
+                        .toList();
+            } else {
+                throw new AccessDeniedException("Invalid user role!");
+            }
             return new GlobalResponse<>(
                     GlobalVars.OK, "user logged in successfully!",
                     JwtResponse.builder()
-                    .accessToken(token)
-                    .role(role)
-                    .build()
+                            .accessToken(token)
+                            .department(department)
+                            .role(role)
+                            .permissions(permissions)
+                            .build()
             );
         } else {
             logger.warn("Authentication failed");
@@ -72,28 +87,15 @@ public class UserService {
         }
     }
 
-    @Transactional
-    public void addRole(UserRoleDTO roleDTO) {
-        // Create a new UserRole
-        UserRole userRole = new UserRole();
-        userRole.setName(roleDTO.getName());
-
-        // Fetch the permissions and create RolePermission entities
-        List<RolePermission> rolePermissions = roleDTO.getPermissionIds().stream()
-                .map(permissionId -> {
-                    Permission permission = permissionRepository.findById(permissionId)
-                            .orElseThrow(() -> new IllegalArgumentException("Permission not found: " + permissionId));
-                    RolePermission rolePermission = new RolePermission();
-                    rolePermission.setRole(userRole);
-                    rolePermission.setPermission(permission);
-                    return rolePermission;
+    public List<UserResponseDTO> getAllUsers() {
+        List<UserManagement> users = userManagementRepository.findAll();
+        return users.stream()
+                .map(user -> {
+                    UserResponseDTO response = modelMapper.map(user, UserResponseDTO.class);
+                    response.setRoleId(user.getRole().getId());
+                    response.setRoleName(user.getRole().getName());
+                    return response;
                 }).toList();
-
-        // Associate RolePermissions with the UserRole
-        userRole.setRolePermissions(rolePermissions);
-
-        // Save the UserRole and cascade the RolePermissions
-        userRoleRepository.save(userRole);
     }
 
     @Transactional
@@ -102,7 +104,6 @@ public class UserService {
         if (userOptional.isPresent()) {
             throw new IllegalArgumentException("Email address already in use!");
         }
-        // Fetch role, create user, and save them in a single transaction
         UserRole role = userRoleRepository.findById(userDTO.getRoleId())
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
 
@@ -111,7 +112,7 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         user.setRole(role);
 
-        userManagementRepository.save(user); // If something goes wrong here, everything gets rolled back.
+        userManagementRepository.save(user);
     }
 
 }

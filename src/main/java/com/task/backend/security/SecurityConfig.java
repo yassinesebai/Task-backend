@@ -51,7 +51,7 @@ public class SecurityConfig {
                         authorizationManagerRequestMatcherRegistry
                                 .requestMatchers(
                                         mvcMatcherBuilder.pattern("/api/v1/user/login"),
-                                        mvcMatcherBuilder.pattern("/api/v1/user/role/add"),
+                                        mvcMatcherBuilder.pattern("/api/v1/role/add"),
                                         mvcMatcherBuilder.pattern("/api/v1/user/create"),
                                         // swagger ui docs urls
                                         mvcMatcherBuilder.pattern("/v3/api-docs/**"),
@@ -60,7 +60,7 @@ public class SecurityConfig {
                                         mvcMatcherBuilder.pattern("/swagger-resources/**"),
 
                                         mvcMatcherBuilder.pattern("/ws")
-                                        ).permitAll()
+                                ).permitAll()
                                 .anyRequest()
                                 .authenticated());
 //                                .permitAll());

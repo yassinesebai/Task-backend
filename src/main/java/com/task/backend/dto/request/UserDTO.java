@@ -28,4 +28,6 @@ public class UserDTO {
 
     @NotNull(message = "Role ID cannot be null")
     private String roleId;
+
+    private String department;
 }

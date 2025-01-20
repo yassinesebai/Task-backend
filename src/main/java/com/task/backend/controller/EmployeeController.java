@@ -6,10 +6,12 @@ import com.task.backend.dto.response.GlobalResponse;
 import com.task.backend.model.EmploymentStatus;
 import com.task.backend.service.EmployeeService;
 import com.task.backend.utils.GlobalVars;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
@@ -20,11 +22,13 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/employee")
+@SecurityRequirement(name = "Bearer Authentication")
 public class EmployeeController {
     private static final Logger log = LoggerFactory.getLogger(EmployeeController.class);
     private final EmployeeService employeeService;
 
     @PostMapping("/add")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'EMPLOYEE', 'CREATE')")
     public GlobalResponse<EmployeeDTO> createEmployee(@RequestBody @Valid EmployeeDTO employeeDTO, BindingResult result) {
         if (result.hasErrors()) {
             StringBuilder errorMsg = new StringBuilder();
@@ -36,6 +40,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/filter")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'EMPLOYEE', 'READ')")
     public GlobalResponse<List<EmployeeDTO>> viewEmployees(
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName,
@@ -61,8 +66,9 @@ public class EmployeeController {
     // are managed dynamically, I couldn't set up a more flexible solution in time.
     // Ideally, we could extend the permissions system to manage column-level access for each table,
     // but for now, this is a temporary solution that works
-    // TODO: yassine - improve permissions management to support column-level access for roles
+    // TODO: - improve permissions management to support column-level access for roles
     @PutMapping("/update/{employeeId}")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'EMPLOYEE', 'UPDATE')")
     public GlobalResponse<EmployeeDTO> updateEmployee(
             @PathVariable String employeeId,
             @RequestBody @Valid EmployeeUpdateDTO updateDTO,
@@ -93,6 +99,7 @@ public class EmployeeController {
             }
             return new GlobalResponse<>(GlobalVars.OK, "Employee updated successfully", updatedEmployee);
         } catch (Exception ex) {
+            ex.printStackTrace();
             return new GlobalResponse<>(
                     GlobalVars.FAILED,
                     "Failed to update employee:" + ex.getMessage()
@@ -101,6 +108,7 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/delete/{employeeId}")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'EMPLOYEE', 'DELETE')")
     public GlobalResponse<Void> deleteEmployee(@PathVariable String employeeId) {
         employeeService.deleteEmployee(employeeId);
         return new GlobalResponse<>(GlobalVars.OK, "Employee deleted successfully");

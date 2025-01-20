@@ -13,5 +13,7 @@ import java.util.List;
 @Builder
 public class JwtResponse {
     private String accessToken;
+    private String department;
     private String role;
+    private List<String> permissions;
 }

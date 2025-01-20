@@ -2,18 +2,19 @@ package com.task.backend.controller;
 
 import com.task.backend.dto.request.AuthRequest;
 import com.task.backend.dto.request.UserDTO;
-import com.task.backend.dto.request.UserRoleDTO;
 import com.task.backend.dto.response.GlobalResponse;
 import com.task.backend.dto.response.JwtResponse;
+import com.task.backend.dto.response.UserResponseDTO;
 import com.task.backend.service.UserService;
 import com.task.backend.utils.GlobalVars;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/user")
@@ -26,17 +27,21 @@ public class UserController {
         return userService.authenticate(authRequest);
     }
 
-    @PostMapping("/role/add")
-    public GlobalResponse<String> addRole(@RequestBody UserRoleDTO roleDTO) {
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/all")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'USER', 'READ')")
+    public GlobalResponse<List<UserResponseDTO>> getUsers() {
         try {
-            userService.addRole(roleDTO);
-            return new GlobalResponse<>(GlobalVars.OK, "Role added successfully");
+            List<UserResponseDTO> users = userService.getAllUsers();
+            return new GlobalResponse<>(GlobalVars.OK, "Users retrieved successfully", users);
         } catch (Exception e) {
-            return new GlobalResponse<>(GlobalVars.SERVER_ERROR, "Failed to add role: " + e.getMessage());
+            return new GlobalResponse<>(GlobalVars.SERVER_ERROR, "Failed to fetch users: " + e.getMessage());
         }
     }
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @PostMapping("/create")
+    @PreAuthorize("@customPermissionEvaluator.hasPermission(authentication, 'USER', 'CREATE')")
     public GlobalResponse<String> createUser(@RequestBody @Valid UserDTO userDTO, BindingResult result) {
         if (result.hasErrors()) {
             StringBuilder errorMsg = new StringBuilder();
