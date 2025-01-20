@@ -26,4 +26,10 @@ public class Permission {
 
     @OneToMany(mappedBy = "permission", cascade = CascadeType.ALL)
     private List<RolePermission> rolePermissions;
+
+    public Permission(String permissionId, String tableName, String action) {
+        this.permissionId = permissionId;
+        this.tableName = tableName;
+        this.action = action;
+    }
 }

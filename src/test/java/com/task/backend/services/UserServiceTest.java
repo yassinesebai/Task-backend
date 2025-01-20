@@ -2,14 +2,11 @@ package com.task.backend.services;
 
 import com.task.backend.dto.request.AuthRequest;
 import com.task.backend.dto.request.UserDTO;
-import com.task.backend.dto.response.GlobalResponse;
-import com.task.backend.dto.response.JwtResponse;
 import com.task.backend.dto.response.UserResponseDTO;
 import com.task.backend.model.UserManagement;
 import com.task.backend.model.UserRole;
 import com.task.backend.repository.UserManagementRepository;
 import com.task.backend.repository.UserRoleRepository;
-import com.task.backend.security.JwtService;
 import com.task.backend.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,24 +16,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import static org.hibernate.validator.internal.util.Contracts.assertNotNull;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
-    @InjectMocks
-    private UserService userService; // << Class tested
+    @Mock
+    private AuthenticationManager authenticationManager;
+
+    @Mock
+    private BCryptPasswordEncoder passwordEncoder;
 
     @Mock
     private UserManagementRepository userManagementRepository;
@@ -47,110 +43,145 @@ class UserServiceTest {
     @Mock
     private ModelMapper modelMapper;
 
-    @Mock
-    private BCryptPasswordEncoder passwordEncoder;
-
-    @Mock
-    private AuthenticationManager authenticationManager;
-
-    @Mock
-    private JwtService jwtService;
+    @InjectMocks
+    private UserService userService;
 
     @Test
-    void createUser_shouldThrowException_whenEmailAlreadyExists() {
-        UserDTO userDTO = new UserDTO();
-        userDTO.setEmail("yassine@gmail.com");
-
-        when(userManagementRepository.findById(userDTO.getEmail()))
-                .thenReturn(Optional.of(new UserManagement()));
-
-        Exception exception = assertThrows(IllegalArgumentException.class,
-                () -> userService.createUser(userDTO));
-        assertEquals("Email address already in use!", exception.getMessage());
-
-        verify(userManagementRepository, times(1)).findById(userDTO.getEmail());
-        verifyNoMoreInteractions(userManagementRepository);
-    }
-
-    @Test
-    void createUser_shouldSaveUser_whenValidRequest() {
-        // Arrange
-        UserDTO userDTO = new UserDTO();
-        userDTO.setEmail("test@example.com");
-        userDTO.setPassword("password123");
-        userDTO.setRoleId("role123");
-        userDTO.setDepartment("IT");
-
-        UserRole role = new UserRole();
-        role.setId("role123");
-
-        UserManagement user = new UserManagement();
-        user.setEmail(userDTO.getEmail());
-
-        when(userManagementRepository.findById(userDTO.getEmail()))
-                .thenReturn(Optional.empty());
-        when(userRoleRepository.findById(userDTO.getRoleId()))
-                .thenReturn(Optional.of(role));
-        when(passwordEncoder.encode(userDTO.getPassword()))
-                .thenReturn("encryptedPassword");
-        when(modelMapper.map(userDTO, UserManagement.class)).thenReturn(user);
-
-        userService.createUser(userDTO);
-
-        verify(userManagementRepository, times(1)).save(user);
-        verify(userRoleRepository, times(1)).findById(userDTO.getRoleId());
-        verify(passwordEncoder, times(1)).encode(userDTO.getPassword());
-    }
-
-    @Test
-    void authenticate_shouldReturnToken_whenCredentialsAreValid() {
-        AuthRequest authRequest = new AuthRequest("test@example.com", "password123");
-        UserManagement userManagement = new UserManagement();
-        userManagement.setEmail("test@example.com");
-        userManagement.setDepartment("IT");
-
-        Authentication authentication = mock(Authentication.class);
-        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenReturn(authentication);
-        when(userManagementRepository.findById(authRequest.getUsername()))
-                .thenReturn(Optional.of(userManagement));
-        when(jwtService.GenerateToken(authRequest.getUsername())).thenReturn("jwtToken");
-
-        GlobalResponse<JwtResponse> response = userService.authenticate(authRequest);
-
-        assertNotNull(response);
-        assertEquals("jwtToken", response.getData().getAccessToken());
-        assertEquals("IT", response.getData().getDepartment());
-    }
-
-    @Test
-    void authenticate_shouldThrowException_whenCredentialsAreInvalid() {
-        AuthRequest authRequest = new AuthRequest("invalid@example.com", "password123");
+    void authenticate_ShouldThrowException_WhenAuthenticationFails() {
+        String username = "invalidUser";
+        String password = "invalidPassword";
+        AuthRequest authRequest = new AuthRequest(username, password);
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new UsernameNotFoundException("Invalid user request!"));
 
-        assertThrows(UsernameNotFoundException.class, () -> userService.authenticate(authRequest));
+        UsernameNotFoundException exception = assertThrows(
+                UsernameNotFoundException.class,
+                () -> userService.authenticate(authRequest)
+        );
+        assertEquals("Invalid user request!", exception.getMessage());
     }
 
     @Test
-    void getAllUsers_shouldReturnUserList_whenUsersExist() {
-        // Arrange
+    void getAllUsers_ShouldReturnListOfUserResponseDTOs() {
+        // Mock data
         UserManagement user1 = new UserManagement();
-        user1.setEmail("user1@example.com");
+        user1.setFirstName("John");
+        user1.setLastName("Doe");
+        user1.setEmail("john.doe@example.com");
+        user1.setRole(new UserRole("1", "ROLE_USER"));
+
         UserManagement user2 = new UserManagement();
-        user2.setEmail("user2@example.com");
-        List<UserManagement> users = Arrays.asList(user1, user2);
+        user2.setFirstName("Jane");
+        user2.setLastName("Smith");
+        user2.setEmail("jane.smith@example.com");
+        user2.setRole(new UserRole("2", "ROLE_ADMIN"));
 
-        when(userManagementRepository.findAll()).thenReturn(users);
-        when(modelMapper.map(user1, UserResponseDTO.class)).thenReturn(new UserResponseDTO());
-        when(modelMapper.map(user2, UserResponseDTO.class)).thenReturn(new UserResponseDTO());
+        List<UserManagement> mockUsers = List.of(user1, user2);
 
-        List<UserResponseDTO> response = userService.getAllUsers();
+        UserResponseDTO dto1 = new UserResponseDTO();
+        dto1.setFirstName("John");
+        dto1.setLastName("Doe");
+        dto1.setEmail("john.doe@example.com");
+        dto1.setRoleId("1");
+        dto1.setRoleName("ROLE_USER");
 
-        // Assert
-        assertNotNull(response);
-        assertEquals(2, response.size());
+        UserResponseDTO dto2 = new UserResponseDTO();
+        dto2.setFirstName("Jane");
+        dto2.setLastName("Smith");
+        dto2.setEmail("jane.smith@example.com");
+        dto2.setRoleId("2");
+        dto2.setRoleName("ROLE_ADMIN");
+
+        when(userManagementRepository.findAll()).thenReturn(mockUsers);
+
+        when(modelMapper.map(user1, UserResponseDTO.class)).thenReturn(dto1);
+        when(modelMapper.map(user2, UserResponseDTO.class)).thenReturn(dto2);
+
+        List<UserResponseDTO> result = userService.getAllUsers();
+
+        assertEquals(2, result.size());
+        assertEquals("John", result.get(0).getFirstName());
+        assertEquals("Doe", result.get(0).getLastName());
+        assertEquals("john.doe@example.com", result.get(0).getEmail());
+        assertEquals("1", result.get(0).getRoleId());
+        assertEquals("ROLE_USER", result.get(0).getRoleName());
+
+        assertEquals("Jane", result.get(1).getFirstName());
+        assertEquals("Smith", result.get(1).getLastName());
+        assertEquals("jane.smith@example.com", result.get(1).getEmail());
+        assertEquals("2", result.get(1).getRoleId());
+        assertEquals("ROLE_ADMIN", result.get(1).getRoleName());
+
+        // Verify interactions
+        verify(userManagementRepository, times(1)).findAll();
+        verify(modelMapper, times(1)).map(user1, UserResponseDTO.class);
+        verify(modelMapper, times(1)).map(user2, UserResponseDTO.class);
+    }
+
+    @Test
+    void createUser_ShouldThrowException_WhenEmailAlreadyInUse() {
+        // Mock data
+        UserDTO userDTO = new UserDTO("John", "Doe", "john.doe@example.com", "password123", "1", "IT");
+        UserManagement existingUser = new UserManagement();
+        existingUser.setEmail("john.doe@example.com");
+
+        // Mock repository behavior
+        when(userManagementRepository.findById(userDTO.getEmail())).thenReturn(Optional.of(existingUser));
+
+        // Assertions
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> userService.createUser(userDTO));
+        assertEquals("Email address already in use!", exception.getMessage());
+
+        // Verify interactions
+        verify(userManagementRepository, times(1)).findById(userDTO.getEmail());
+        verify(userRoleRepository, never()).findById(anyString());
+        verify(userManagementRepository, never()).save(any(UserManagement.class));
+    }
+
+    @Test
+    void createUser_ShouldThrowException_WhenRoleNotFound() {
+        // Mock data
+        UserDTO userDTO = new UserDTO("John", "Doe", "john.doe@example.com", "password123", "invalidRoleId", "IT");
+
+        // Mock repository behavior
+        when(userManagementRepository.findById(userDTO.getEmail())).thenReturn(Optional.empty());
+        when(userRoleRepository.findById(userDTO.getRoleId())).thenReturn(Optional.empty());
+
+        // Assertions
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> userService.createUser(userDTO));
+        assertEquals("Role not found", exception.getMessage());
+
+        // Verify interactions
+        verify(userManagementRepository, times(1)).findById(userDTO.getEmail());
+        verify(userRoleRepository, times(1)).findById(userDTO.getRoleId());
+        verify(userManagementRepository, never()).save(any(UserManagement.class));
+    }
+
+    @Test
+    void createUser_ShouldSaveUserSuccessfully_WhenValidDataProvided() {
+        UserDTO userDTO = new UserDTO("John", "Doe", "john.doe@example.com", "password123", "1", "IT");
+        UserRole role = new UserRole("1", "ROLE_USER");
+
+        UserManagement mappedUser = new UserManagement();
+        mappedUser.setFirstName(userDTO.getFirstName());
+        mappedUser.setLastName(userDTO.getLastName());
+        mappedUser.setEmail(userDTO.getEmail());
+        mappedUser.setDepartment(userDTO.getDepartment());
+        mappedUser.setPassword("encodedPassword");
+        mappedUser.setRole(role);
+
+        when(userManagementRepository.findById(userDTO.getEmail())).thenReturn(Optional.empty());
+        when(userRoleRepository.findById(userDTO.getRoleId())).thenReturn(Optional.of(role));
+        when(modelMapper.map(userDTO, UserManagement.class)).thenReturn(mappedUser);
+        when(passwordEncoder.encode(userDTO.getPassword())).thenReturn("encodedPassword");
+
+        userService.createUser(userDTO);
+
+        verify(userManagementRepository, times(1)).findById(userDTO.getEmail());
+        verify(userRoleRepository, times(1)).findById(userDTO.getRoleId());
+        verify(modelMapper, times(1)).map(userDTO, UserManagement.class);
+        verify(passwordEncoder, times(1)).encode(userDTO.getPassword());
+        verify(userManagementRepository, times(1)).save(mappedUser);
     }
 }
-

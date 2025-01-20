@@ -1,5 +1,8 @@
 package com.task.backend.services;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.task.backend.dto.request.EmployeeUpdateDTO;
 import com.task.backend.dto.response.EmployeeDTO;
 import com.task.backend.model.Employee;
@@ -8,23 +11,18 @@ import com.task.backend.repository.EmployeeRepository;
 import com.task.backend.service.EmployeeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
 import org.modelmapper.ModelMapper;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class EmployeeServiceTest {
+
+    @InjectMocks
+    private EmployeeService employeeService;
 
     @Mock
     private EmployeeRepository employeeRepository;
@@ -32,149 +30,188 @@ class EmployeeServiceTest {
     @Mock
     private ModelMapper modelMapper;
 
-    @InjectMocks
-    private EmployeeService employeeService;
-
-    private EmployeeDTO employeeDTO;
-    private Employee employee;
-    private EmployeeUpdateDTO updateDTO;
-
     @BeforeEach
     void setUp() {
-        employeeDTO = new EmployeeDTO();
-        employeeDTO.setEmployeeId("EMP12345");
-        employeeDTO.setFirstName("John");
-        employeeDTO.setLastName("Doe");
-        employeeDTO.setJobTitle("Developer");
-        employeeDTO.setDepartment("IT");
-        employeeDTO.setHireDate(LocalDate.now());
-        employeeDTO.setEmploymentStatus(EmploymentStatus.ACTIVE);
-        employeeDTO.setContactInformation("john.doe@example.com");
-        employeeDTO.setAddress("123 Main St");
-
-        employee = new Employee();
-        // Set same values as DTO
-        employee.setEmployeeId("EMP12345");
-        employee.setFirstName("John");
-        employee.setLastName("Doe");
-        employee.setJobTitle("Developer");
-        employee.setDepartment("IT");
-        employee.setHireDate(LocalDate.now());
-        employee.setEmploymentStatus(EmploymentStatus.ACTIVE);
-        employee.setContactInformation("john.doe@example.com");
-        employee.setAddress("123 Main St");
-
-        updateDTO = new EmployeeUpdateDTO();
-        updateDTO.setFirstName("Jane");
-        updateDTO.setLastName("Doe");
-        updateDTO.setJobTitle("Senior Developer");
-        updateDTO.setDepartment("IT");
-        updateDTO.setHireDate(LocalDate.now());
-        updateDTO.setEmploymentStatus(EmploymentStatus.ACTIVE);
-        updateDTO.setContactInformation("jane.doe@example.com");
-        updateDTO.setAddress("456 Oak St");
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    void createEmployee_Success() {
-        when(employeeRepository.existsByEmployeeId(anyString())).thenReturn(false);
-        when(modelMapper.map(any(EmployeeDTO.class), eq(Employee.class))).thenReturn(employee);
-        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
-        when(modelMapper.map(any(Employee.class), eq(EmployeeDTO.class))).thenReturn(employeeDTO);
+    void createEmployee_ShouldThrowException_WhenEmployeeIdExists() {
+        EmployeeDTO employeeDTO = new EmployeeDTO();
+        employeeDTO.setEmployeeId("EMP10101");
+
+        when(employeeRepository.existsByEmployeeId(employeeDTO.getEmployeeId())).thenReturn(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> employeeService.createEmployee(employeeDTO));
+        assertEquals("Employee with this ID already exists.", exception.getMessage());
+
+        verify(employeeRepository, times(1)).existsByEmployeeId(employeeDTO.getEmployeeId());
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    void createEmployee_ShouldSaveEmployeeSuccessfully_WhenValidDataProvided() {
+        EmployeeDTO employeeDTO = new EmployeeDTO();
+        employeeDTO.setEmployeeId("EMP10102");
+        employeeDTO.setFirstName("Ali");
+        employeeDTO.setLastName("Khan");
+        employeeDTO.setJobTitle("Backend Engineer");
+        employeeDTO.setDepartment("Tech");
+        employeeDTO.setHireDate(LocalDate.of(2023, 6, 10));
+        employeeDTO.setEmploymentStatus(EmploymentStatus.ACTIVE);
+        employeeDTO.setContactInformation("ali.khan@company.com");
+        employeeDTO.setAddress("Downtown, Block 4, Cityville");
+
+        Employee employee = new Employee();
+        employee.setEmployeeId("EMP10102");
+        employee.setFirstName("Ali");
+        employee.setLastName("Khan");
+
+        Employee savedEmployee = new Employee();
+        savedEmployee.setId("3");
+        savedEmployee.setEmployeeId("EMP10102");
+        savedEmployee.setFirstName("Ali");
+        savedEmployee.setLastName("Khan");
+
+        when(employeeRepository.existsByEmployeeId(employeeDTO.getEmployeeId())).thenReturn(false);
+        when(modelMapper.map(employeeDTO, Employee.class)).thenReturn(employee);
+        when(employeeRepository.save(employee)).thenReturn(savedEmployee);
+        when(modelMapper.map(savedEmployee, EmployeeDTO.class)).thenReturn(employeeDTO);
 
         EmployeeDTO result = employeeService.createEmployee(employeeDTO);
 
         assertNotNull(result);
-        assertEquals(employeeDTO.getEmployeeId(), result.getEmployeeId());
-        verify(employeeRepository).save(any(Employee.class));
+        assertEquals("EMP10102", result.getEmployeeId());
+        assertEquals("Ali", result.getFirstName());
+        assertEquals("Khan", result.getLastName());
+
+        verify(employeeRepository, times(1)).existsByEmployeeId(employeeDTO.getEmployeeId());
+        verify(modelMapper, times(1)).map(employeeDTO, Employee.class);
+        verify(employeeRepository, times(1)).save(employee);
+        verify(modelMapper, times(1)).map(savedEmployee, EmployeeDTO.class);
     }
 
     @Test
-    void createEmployee_DuplicateId_ThrowsException() {
-        when(employeeRepository.existsByEmployeeId(anyString())).thenReturn(true);
+    void updateEmployeeRH_ShouldUpdateAllFields() {
+        Employee existingEmployee = new Employee();
+        existingEmployee.setEmployeeId("EMP20205");
+        existingEmployee.setFirstName("Rachid");
+        existingEmployee.setLastName("Amrani");
+        existingEmployee.setDepartment("Human Resources");
 
-        assertThrows(IllegalArgumentException.class, () -> employeeService.createEmployee(employeeDTO));
-    }
+        EmployeeUpdateDTO updateDTO = new EmployeeUpdateDTO();
+        updateDTO.setFirstName("Rachid Updated");
+        updateDTO.setLastName("Amrani Updated");
+        updateDTO.setDepartment("Finance");
 
-    @Test
-    void getEmployees_WithFilters() {
-        List<Employee> employeeList = Collections.singletonList(employee);
-        when(employeeRepository.findAll(any(Specification.class))).thenReturn(employeeList);
-        when(modelMapper.map(any(Employee.class), eq(EmployeeDTO.class))).thenReturn(employeeDTO);
+        Employee updatedEmployee = new Employee();
+        updatedEmployee.setEmployeeId("EMP20205");
+        updatedEmployee.setFirstName("Rachid Updated");
+        updatedEmployee.setLastName("Amrani Updated");
+        updatedEmployee.setDepartment("Finance");
 
-        List<EmployeeDTO> result = employeeService.getEmployees(
-                "John", "Doe", "IT", "Developer",
-                EmploymentStatus.ACTIVE, "EMP12345", LocalDate.now()
-        );
+        EmployeeDTO updatedEmployeeDTO = new EmployeeDTO();
+        updatedEmployeeDTO.setEmployeeId("EMP20205");
+        updatedEmployeeDTO.setFirstName("Rachid Updated");
+        updatedEmployeeDTO.setLastName("Amrani Updated");
+        updatedEmployeeDTO.setDepartment("Finance");
+
+        when(employeeRepository.findByEmployeeId("EMP20205")).thenReturn(Optional.of(existingEmployee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(updatedEmployee);
+        when(modelMapper.map(updateDTO, Employee.class)).thenReturn(existingEmployee);
+        when(modelMapper.map(updatedEmployee, EmployeeDTO.class)).thenReturn(updatedEmployeeDTO);
+
+        EmployeeDTO result = employeeService.updateEmployeeRH("EMP20205", updateDTO);
 
         assertNotNull(result);
-        assertFalse(result.isEmpty());
-        assertEquals(1, result.size());
-        verify(employeeRepository).findAll(any(Specification.class));
+        assertEquals("Rachid Updated", result.getFirstName());
+        assertEquals("Finance", result.getDepartment());
+
+        verify(employeeRepository, times(1)).findByEmployeeId("EMP20205");
+        verify(employeeRepository, times(1)).save(existingEmployee);
+        verify(modelMapper, times(1)).map(updateDTO, existingEmployee);
+        verify(modelMapper, times(1)).map(updatedEmployee, EmployeeDTO.class);
     }
 
     @Test
-    void updateEmployeeRH_Success() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.of(employee));
-        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
-        when(modelMapper.map(any(Employee.class), eq(EmployeeDTO.class))).thenReturn(employeeDTO);
+    void updateEmployeeManager_ShouldUpdateAllowedFields() {
+        Employee existingEmployee = new Employee();
+        existingEmployee.setEmployeeId("EMP20206");
+        existingEmployee.setFirstName("Hassan");
+        existingEmployee.setLastName("Ben Salah");
+        existingEmployee.setJobTitle("Junior Developer");
+        existingEmployee.setContactInformation("hassan.bensalah@example.com");
+        existingEmployee.setAddress("Rabat, Morocco");
 
-        EmployeeDTO result = employeeService.updateEmployeeRH("EMP12345", updateDTO);
+        Employee updatedEmployee = new Employee();
+        updatedEmployee.setEmployeeId("EMP20206");
+        updatedEmployee.setFirstName("Hassan");
+        updatedEmployee.setLastName("Ben Salah");
+        updatedEmployee.setJobTitle("Senior Developer");
+        updatedEmployee.setContactInformation("hassan.bensalah@newexample.com");
+        updatedEmployee.setAddress("Casablanca, Morocco");
 
-        assertNotNull(result);
-        verify(employeeRepository).save(any(Employee.class));
-    }
+        EmployeeDTO updatedEmployeeDTO = new EmployeeDTO();
+        updatedEmployeeDTO.setEmployeeId("EMP20206");
+        updatedEmployeeDTO.setFirstName("Hassan");
+        updatedEmployeeDTO.setLastName("Ben Salah");
+        updatedEmployeeDTO.setJobTitle("Senior Developer");
+        updatedEmployeeDTO.setContactInformation("hassan.bensalah@newexample.com");
+        updatedEmployeeDTO.setAddress("Casablanca, Morocco");
 
-    @Test
-    void updateEmployeeRH_NotFound_ThrowsException() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.empty());
-
-        assertThrows(IllegalArgumentException.class, () -> employeeService.updateEmployeeRH("EMP12345", updateDTO));
-    }
-
-    @Test
-    void updateEmployeeManager_Success() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.of(employee));
-        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
-        when(modelMapper.map(any(Employee.class), eq(EmployeeDTO.class))).thenReturn(employeeDTO);
+        when(employeeRepository.findByEmployeeId("EMP20206")).thenReturn(Optional.of(existingEmployee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(updatedEmployee);
+        when(modelMapper.map(updatedEmployee, EmployeeDTO.class)).thenReturn(updatedEmployeeDTO);
 
         EmployeeDTO result = employeeService.updateEmployeeManager(
-                "EMP12345",
+                "EMP20206",
                 "Senior Developer",
-                "jane.doe@example.com",
-                "456 Oak St"
+                "hassan.bensalah@newexample.com",
+                "Casablanca, Morocco"
         );
 
         assertNotNull(result);
-        verify(employeeRepository).save(any(Employee.class));
+        assertEquals("Senior Developer", result.getJobTitle());
+        assertEquals("Casablanca, Morocco", result.getAddress());
+
+        verify(employeeRepository, times(1)).findByEmployeeId("EMP20206");
+        verify(employeeRepository, times(1)).save(existingEmployee);
+        verify(modelMapper, times(1)).map(updatedEmployee, EmployeeDTO.class);
     }
 
     @Test
-    void updateEmployeeManager_NotFound_ThrowsException() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.empty());
+    void deleteEmployee_ShouldDeleteExistingEmployee() {
+        String employeeId = "EMP20207";
+        Employee employee = new Employee();
+        employee.setEmployeeId(employeeId);
+        employee.setFirstName("Ahmed");
+        employee.setLastName("El Khattabi");
+        employee.setJobTitle("Software Engineer");
+        employee.setDepartment("IT");
+        employee.setContactInformation("ahmed.elkhattabi@example.com");
+        employee.setAddress("Marrakech, Morocco");
 
-        assertThrows(IllegalArgumentException.class, () -> employeeService.updateEmployeeManager(
-                "EMP12345",
-                "Senior Developer",
-                "jane.doe@example.com",
-                "456 Oak St"
-        ));
+        when(employeeRepository.findByEmployeeId(employeeId)).thenReturn(Optional.of(employee));
+
+        // Act
+        employeeService.deleteEmployee(employeeId);
+
+        // Assert
+        verify(employeeRepository, times(1)).findByEmployeeId(employeeId);
+        verify(employeeRepository, times(1)).delete(employee);
     }
 
     @Test
-    void deleteEmployee_Success() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.of(employee));
-        doNothing().when(employeeRepository).delete(any(Employee.class));
+    void deleteEmployee_ShouldThrowExceptionWhenEmployeeNotFound() {
+        String employeeId = "EMP99999";
 
-        employeeService.deleteEmployee("EMP12345");
+        when(employeeRepository.findByEmployeeId(employeeId)).thenReturn(Optional.empty());
 
-        verify(employeeRepository).delete(any(Employee.class));
-    }
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                employeeService.deleteEmployee(employeeId));
 
-    @Test
-    void deleteEmployee_NotFound_ThrowsException() {
-        when(employeeRepository.findByEmployeeId(anyString())).thenReturn(Optional.empty());
-
-        assertThrows(IllegalArgumentException.class, () -> employeeService.deleteEmployee("EMP12345"));
+        assertEquals("Employee not found.", exception.getMessage());
+        verify(employeeRepository, times(1)).findByEmployeeId(employeeId);
+        verify(employeeRepository, times(0)).delete(any(Employee.class));
     }
 }

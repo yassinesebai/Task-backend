@@ -27,6 +27,12 @@ public class UserRole {
         super();
         this.name = name;
     }
+
+    public UserRole(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
     public GrantedAuthority toGrantedAuthority() {
         return new SimpleGrantedAuthority(this.getName());
     }

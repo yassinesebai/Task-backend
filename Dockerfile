@@ -1,4 +1,5 @@
 FROM openjdk:17
-COPY ./target/*.war app.war
+WORKDIR /app
+COPY ./target/backend.war /app
 EXPOSE 9195
-CMD ["java", "-jar", "/app.war"]
+CMD ["java", "-jar", "backend.war"]

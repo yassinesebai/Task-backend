@@ -1,10 +1,12 @@
 package com.task.backend.dto.request;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.List;
 
 @Data
+@AllArgsConstructor
 public class UserRoleDTO {
     private String id;
     private String name;
